@@ -1,4 +1,5 @@
 .idea
 
-src/third_party/Indoor-Outdoor-scene-classification/*.jpg
-src/third_party/Indoor-Outdoor-scene-classification/*.tar
+src/third_party/io_classification/__pycache__
+src/third_party/io_classification/*.jpg
+src/third_party/io_classification/*.tar
