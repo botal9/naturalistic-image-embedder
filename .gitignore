@@ -1,0 +1,4 @@
+.idea
+
+src/third_party/Indoor-Outdoor-scene-classification/*.jpg
+src/third_party/Indoor-Outdoor-scene-classification/*.tar
