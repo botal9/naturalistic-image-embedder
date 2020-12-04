@@ -10,6 +10,28 @@ import numpy as np
 import cv2
 from PIL import Image
 
+SOURCES = {
+    'categories_places365.txt':
+        'https://raw.githubusercontent.com/csailvision/places365/master/categories_places365.txt',
+    'IO_places365.txt': 'https://raw.githubusercontent.com/csailvision/places365/master/IO_places365.txt',
+    'labels_sunattribute.txt': 'https://raw.githubusercontent.com/csailvision/places365/master/labels_sunattribute.txt',
+    'W_sceneattribute_wideresnet18.npy':
+        'http://places2.csail.mit.edu/models_places365/W_sceneattribute_wideresnet18.npy',
+    'wideresnet18_places365.pth.tar': 'http://places2.csail.mit.edu/models_places365/wideresnet18_places365.pth.tar',
+    'wideresnet.py': 'https://raw.githubusercontent.com/csailvision/places365/master/wideresnet.py',
+}
+
+
+def full_name(file_name):
+    return os.path.join(os.path.split(__file__)[0], file_name)
+
+
+def ensure_exists(file_name):
+    full_file_name = full_name(file_name)
+    if not os.access(full_file_name, os.W_OK):
+        source_url = SOURCES[file_name]
+        os.system(f'wget {source_url} -O {full_file_name}')
+
 
 # hacky way to deal with the Pytorch 1.0 update
 def recursion_change_bn(module):
@@ -24,22 +46,18 @@ def recursion_change_bn(module):
 def load_labels():
     # prepare all the labels
     # scene category relevant
-    file_name_category = 'categories_places365.txt'
-    if not os.access(file_name_category, os.W_OK):
-        synset_url = 'https://raw.githubusercontent.com/csailvision/places365/master/categories_places365.txt'
-        os.system('wget ' + synset_url)
+    file_name_categories = 'categories_places365.txt'
+    ensure_exists(file_name_categories)
     classes = list()
-    with open(file_name_category) as class_file:
+    with open(full_name(file_name_categories)) as class_file:
         for line in class_file:
             classes.append(line.strip().split(' ')[0][3:])
     classes = tuple(classes)
 
     # indoor and outdoor relevant
     file_name_IO = 'IO_places365.txt'
-    if not os.access(file_name_IO, os.W_OK):
-        synset_url = 'https://raw.githubusercontent.com/csailvision/places365/master/IO_places365.txt'
-        os.system('wget ' + synset_url)
-    with open(file_name_IO) as f:
+    ensure_exists(file_name_IO)
+    with open(full_name(file_name_IO)) as f:
         lines = f.readlines()
         labels_IO = []
         for line in lines:
@@ -49,17 +67,14 @@ def load_labels():
 
     # scene attribute relevant
     file_name_attribute = 'labels_sunattribute.txt'
-    if not os.access(file_name_attribute, os.W_OK):
-        synset_url = 'https://raw.githubusercontent.com/csailvision/places365/master/labels_sunattribute.txt'
-        os.system('wget ' + synset_url)
-    with open(file_name_attribute) as f:
+    ensure_exists(file_name_attribute)
+    with open(full_name(file_name_attribute)) as f:
         lines = f.readlines()
         labels_attribute = [item.rstrip() for item in lines]
+
     file_name_W = 'W_sceneattribute_wideresnet18.npy'
-    if not os.access(file_name_W, os.W_OK):
-        synset_url = 'http://places2.csail.mit.edu/models_places365/W_sceneattribute_wideresnet18.npy'
-        os.system('wget ' + synset_url)
-    W_attribute = np.load(file_name_W)
+    ensure_exists(file_name_W)
+    W_attribute = np.load(full_name(file_name_W))
 
     return classes, labels_IO, labels_attribute, W_attribute
 
@@ -98,15 +113,16 @@ def hook_feature(module, input, output):
 
 def load_model():
     # this model has a last conv feature map as 14x14
-
     model_file = 'wideresnet18_places365.pth.tar'
-    if not os.access(model_file, os.W_OK):
-        os.system('wget http://places2.csail.mit.edu/models_places365/' + model_file)
-        os.system('wget https://raw.githubusercontent.com/csailvision/places365/master/wideresnet.py')
+    ensure_exists(model_file)
 
-    import wideresnet
+    wideresnet_file = 'wideresnet.py'
+    ensure_exists(wideresnet_file)
+
+    from . import wideresnet
+
     model = wideresnet.resnet18(num_classes=365)
-    checkpoint = torch.load(model_file, map_location=lambda storage, loc: storage)
+    checkpoint = torch.load(full_name(model_file), map_location=lambda storage, loc: storage)
     state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}
     model.load_state_dict(state_dict)
 
@@ -126,9 +142,7 @@ def load_model():
 
 def predict_image_attributes(image, verbose=False):
     classes, labels_IO, labels_attribute, W_attribute = load_labels()
-
     model = load_model()
-
     tf = returnTF()  # image transformer
 
     # get the softmax weight
