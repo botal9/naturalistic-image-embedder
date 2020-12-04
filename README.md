@@ -9,7 +9,7 @@ OpenEXR.cpp:36:10: fatal error: ImathBox.h: No such file or directory
 compilation terminated.
 error: command 'x86_64-linux-gnu-gcc' failed with exit status 1
 ```
-If you see something like this while during the requirements installation, you should install "libopenexr-dev" library. Try
+If you see something like this while during the requirements installation, install the "libopenexr-dev" library.
 ```
 sudo apt-get install libopenexr-dev
 sudo apt-get install openexr
