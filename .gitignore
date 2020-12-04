@@ -1,4 +1,4 @@
 .idea
 
-src/third_party/io_classification/__pycache__
-src/third_party/io_classification/*.jpg
+**/__pycache__
+naturalistic_image_embedder/third_party/io_classification/*.jpg
