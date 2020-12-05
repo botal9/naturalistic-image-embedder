@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import os.path as path
 import requests
 from typing import Dict, Any
@@ -35,7 +36,7 @@ class HdrClient:
 
         demo_url = self.get_hdr_generator_url(lighting_type)
         demo_response = requests.post(demo_url, files={'file': (ldr_image_path, open(ldr_image_path, 'rb'))})
-        if not demo_response.ok:
+        if demo_response.status_code != HTTPStatus.OK:
             raise HdrClientError(f'Got {demo_response.status_code} on {demo_url} request')
 
         self.parser.parse(demo_response.text)
@@ -54,7 +55,7 @@ class HdrClient:
 
         image_url = demo_url + image_download_path[2:]  # remove "./"
         image_response = requests.get(image_url)
-        if not image_response.ok:
+        if image_response.status_code != HTTPStatus.OK:
             raise HdrClientError(f'Got {image_response.status_code} on {image_url} request')
 
         return image_response.content, additional_data
