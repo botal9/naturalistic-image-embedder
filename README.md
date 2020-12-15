@@ -1,5 +1,14 @@
 # naturalistic-image-embedder
 
+### Run
+
+Execute `python3 sample.py` to run all samples. The results will be in the `/out` subdirectory.
+
+Run in the following way on your own images:
+```
+python3 sample.py <background image path> <foreground image path> <out image path> <offset by X coordinate> <offset by Y coordinate> <naive | poisson_blending | color_transfer>
+```
+
 ### Troubleshooting
 
 ```
