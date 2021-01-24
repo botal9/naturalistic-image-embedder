@@ -2,6 +2,7 @@ from naturalistic_image_embedder.common.image import insert_image, InsertionType
 
 import os
 import sys
+import webbrowser
 
 
 def run(background_image_path,
@@ -28,7 +29,7 @@ def run(background_image_path,
 
 
 def run_sample():
-    offsets = [(20, 210), (1000, 800), (0, 0)]
+    offsets = [(20, 210), (1000, 800), (0, 0), (1100, 850)]
     proj_dir = os.path.split(__file__)[0]
     image_dir = os.path.join(proj_dir, 'images')
     out_dir = os.path.join(proj_dir, 'out')
@@ -51,9 +52,18 @@ def run_sample():
                          insertion_type)
 
 
+EVALUATE_REALISM = False
+REALISM_CNN_FOLDER = '/home/ovechkinve/itmo/diploma/RealismCNN'
+
+
 if __name__ == '__main__':
     if len(sys.argv) == 1:
         run_sample()
+        if EVALUATE_REALISM:
+            script_path = os.path.join(REALISM_CNN_FOLDER, 'PredictRealism.m')
+            html_path = os.path.join(REALISM_CNN_FOLDER, 'web/ranking/realism_cnn_all/index.html')
+            os.system(f'matlab -batch "run(\'{script_path}\');exit;" >/dev/null 2>&1')
+            webbrowser.open_new(html_path)
     else:
         if len(sys.argv) != 7:
             print('Need to specify 6 arguments: background, foreground and out image paths, '
