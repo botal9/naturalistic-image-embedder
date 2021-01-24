@@ -5,6 +5,7 @@ import torch
 from torch.autograd import Variable as V
 from torchvision import transforms as trn
 from torch.nn import functional as F
+
 import os
 import numpy as np
 import cv2
@@ -150,12 +151,7 @@ def predict_image_attributes(image, verbose=False):
     weight_softmax = params[-2].data.numpy()
     weight_softmax[weight_softmax < 0] = 0
 
-    if image.startswith('http'):
-        # load the test image
-        os.system(f'wget {image} -q -O image.jpg')
-        img = Image.open('image.jpg')
-    else:
-        img = Image.open(image)
+    img = Image.open(image)
     with torch.no_grad():
         input_img = V(tf(img).unsqueeze(0))
 
