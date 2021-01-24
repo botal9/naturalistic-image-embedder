@@ -28,7 +28,7 @@ def run(background_image_path,
 
 
 def run_sample():
-    offsets = [(20, 210), (1000, 800)]
+    offsets = [(20, 210), (1000, 800), (0, 0)]
     proj_dir = os.path.split(__file__)[0]
     image_dir = os.path.join(proj_dir, 'images')
     out_dir = os.path.join(proj_dir, 'out')

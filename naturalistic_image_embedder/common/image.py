@@ -1,3 +1,5 @@
+from .conversions import *
+
 import cv2
 from enum import Enum
 import numpy as np
@@ -18,6 +20,7 @@ def insert_image(background_image_path,
     bg = cv2.imread(background_image_path)
     fg = cv2.imread(foreground_image_path)
     fg_bitwise_mask = (fg > 0).astype('uint8')
+    # fg_bitwise_mask = (255 * np.ones(fg.shape)).astype('uint8')
 
     if (insertion_type == InsertionType.POISSON_BLENDING_NORMAL or
             insertion_type == InsertionType.POISSON_BLENDING_MIXED):
@@ -48,32 +51,15 @@ def crop(image, size, offset):
     return image[offset_y:offset_y+h, offset_x:offset_x+w, :]
 
 
-def lighting_transfer(target, target_mask, hdr_reference):
-    # Does not work
-    l_target_mask = target_mask[:, :, 0]
-    mask_size = np.sum(l_target_mask)
+def lighting_transfer(target, target_mask, reference):
+    # Still works not as expected
     target_lab = cv2.cvtColor(target, cv2.COLOR_BGR2LAB).astype('float32')
-    hdr_reference_lab = cv2.cvtColor(hdr_reference, cv2.COLOR_BGR2LAB).astype('float32')
+    reference_lab = cv2.cvtColor(reference, cv2.COLOR_BGR2LAB).astype('float32')
 
-    l_target = target_lab[:, :, 0]
-    print(*l_target)
-    l_ref = hdr_reference_lab[:, :, 0]
+    out = mean_std_color_transfer(target_lab, target_mask, reference_lab)
 
-    l_mean_target = np.sum(l_target) / mask_size
-    l_mean_ref = np.mean(l_ref)
-
-    target_h, target_w = target.shape[:2]
-    l_target_mean_filled_frame = np.repeat(l_mean_target, target_h * target_w).reshape(target_h, target_w)
-    l_framed_target = l_target + l_target_mean_filled_frame * (1 - l_target_mask)
-
-    std_target = np.std(l_framed_target)
-    std_ref = np.std(l_ref)
-    print(l_mean_target, l_mean_ref, std_target, std_ref)
-    l_out = (l_framed_target - l_mean_target) / std_target * std_ref + l_mean_ref
-
-    out_lab = np.copy(target_lab)
-    out_lab[:, :, 0] = np.clip(l_out, 0, 255)
-    return cv2.cvtColor(out_lab, cv2.COLOR_LAB2BGR).astype('uint8')
+    out_bgr = cv2.cvtColor(out.astype('float32'), cv2.COLOR_LAB2BGR)
+    return out_bgr.astype('uint8')
 
 
 def mean_std_color_transfer(target, target_mask, reference):
@@ -89,7 +75,7 @@ def mean_std_color_transfer(target, target_mask, reference):
     std_ref = np.std(reference, axis=(0, 1), keepdims=True)
     out = (framed_target - mean_target) / std_target * std_ref + mean_ref
     out_clipped = np.clip(out, 0, 255)
-    return out_clipped.astype('uint8')
+    return out_clipped
 
 
 def naive_insert(bg, fg, fg_mask, offset):
