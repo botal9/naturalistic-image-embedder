@@ -1,4 +1,5 @@
 # Copyright 2017 Nitish Mutha (nitishmutha.com)
+# Copyright 2021 Vitalii Ovechkin
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,9 +16,10 @@
 from math import pi
 import numpy as np
 
-class NFOV():
-    def __init__(self, height=400, width=800):
-        self.FOV = [0.45, 0.45]
+
+class NFOV:
+    def __init__(self, height=400, width=800, FOV=None):
+        self.FOV = FOV or [0.45, 0.45]
         self.PI = pi
         self.PI_2 = pi * 0.5
         self.PI2 = pi * 2.0
@@ -25,11 +27,11 @@ class NFOV():
         self.width = width
         self.screen_points = self._get_screen_img()
 
-    def _get_coord_rad(self, isCenterPt, center_point=None):
-        return (center_point * 2 - 1) * np.array([self.PI, self.PI_2]) \
-            if isCenterPt \
-            else \
-            (self.screen_points * 2 - 1) * np.array([self.PI, self.PI_2]) * (
+    def _get_coord_rad_for_point(self, center_point):
+        return (center_point * 2 - 1) * np.array([self.PI, self.PI_2])
+
+    def _get_coord_rad(self):
+        return (self.screen_points * 2 - 1) * np.array([self.PI, self.PI_2]) * (
                 np.ones(self.screen_points.shape) * self.FOV)
 
     def _get_screen_img(self):
@@ -53,9 +55,9 @@ class NFOV():
 
         return np.array([lon, lat]).T
 
-    def _bilinear_interpolation(self, screen_coord):
-        uf = np.mod(screen_coord.T[0],1) * self.frame_width  # long - width
-        vf = np.mod(screen_coord.T[1],1) * self.frame_height  # lat - height
+    def _bilinear_interpolation(self, screen_coord, dt):
+        uf = np.mod(screen_coord.T[0], 1) * self.frame_width  # long - width
+        vf = np.mod(screen_coord.T[1], 1) * self.frame_height  # lat - height
 
         x0 = np.floor(uf).astype(int)  # coord of pixel to bottom left
         y0 = np.floor(vf).astype(int)
@@ -70,7 +72,7 @@ class NFOV():
         C_idx = np.add(base_y0, x2)
         D_idx = np.add(base_y2, x2)
 
-        flat_img = np.reshape(self.frame, [-1, self.frame_channel])
+        flat_img = np.reshape(self.frame, [-1, self.frame_channel]).astype(dt)
 
         A = np.take(flat_img, A_idx, axis=0)
         B = np.take(flat_img, B_idx, axis=0)
@@ -82,33 +84,30 @@ class NFOV():
         wc = np.multiply(uf - x0, y2 - vf)
         wd = np.multiply(uf - x0, vf - y0)
 
+        waf = np.array([wa for _ in range(self.frame_channel)]).T
+        wbf = np.array([wb for _ in range(self.frame_channel)]).T
+        wcf = np.array([wc for _ in range(self.frame_channel)]).T
+        wdf = np.array([wd for _ in range(self.frame_channel)]).T
+
         # interpolate
-        AA = np.multiply(A, np.array([wa, wa, wa]).T)
-        BB = np.multiply(B, np.array([wb, wb, wb]).T)
-        CC = np.multiply(C, np.array([wc, wc, wc]).T)
-        DD = np.multiply(D, np.array([wd, wd, wd]).T)
-        nfov = np.reshape(np.round(AA + BB + CC + DD).astype(np.uint8), [self.height, self.width, 3])
-        import matplotlib.pyplot as plt
-        plt.imshow(nfov)
-        plt.show()
+        AA = np.multiply(A, waf)
+        BB = np.multiply(B, wbf)
+        CC = np.multiply(C, wcf)
+        DD = np.multiply(D, wdf)
+        nfov = np.reshape((AA + BB + CC + DD).astype(dt), [self.height, self.width, self.frame_channel])
         return nfov
 
-    def toNFOV(self, frame, center_point):
-        self.frame = frame
+    def toNFOV(self, frame, center_point, dt='uint8'):
+        self.frame = frame.astype(dt)
         self.frame_height = frame.shape[0]
         self.frame_width = frame.shape[1]
         self.frame_channel = frame.shape[2]
 
-        self.cp = self._get_coord_rad(center_point=center_point, isCenterPt=True)
-        convertedScreenCoord = self._get_coord_rad(isCenterPt=False)
+        self.cp = self._get_coord_rad_for_point(center_point)
+        convertedScreenCoord = self._get_coord_rad()
         spericalCoord = self._calcSphericaltoGnomonic(convertedScreenCoord)
-        return self._bilinear_interpolation(spericalCoord)
+        return self._bilinear_interpolation(spericalCoord, dt)
 
-
-# test the class
-if __name__ == '__main__':
-    import imageio as im
-    img = im.imread('images/360.jpg')
-    nfov = NFOV()
-    center_point = np.array([0.5, .5])  # camera center point (valid range [0,1])
-    nfov.toNFOV(img, center_point)
+    def convert(self, image, point, dt='uint8'):
+        w, h = point
+        return self.toNFOV(image, np.array([w, h]), dt)
