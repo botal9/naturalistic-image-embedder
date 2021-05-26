@@ -20,10 +20,10 @@ class EmbModel(BaseModel):
         By default, we use vanilla GAN loss, UNet with batchnorm, and aligned datasets.
         """
         # changing the default values to match the pix2pix paper (https://phillipi.github.io/pix2pix/)
-        parser.set_defaults(norm='batch', netG='unet_256', dataset_mode='emb', input_nc=4, output_nc=4, niter=40, niter_decay=40)
+        parser.set_defaults(norm='batch', netG='unet_256', dataset_mode='emb', input_nc=4, output_nc=3, niter=80, niter_decay=80)
+        parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
         if is_train:
             parser.set_defaults(pool_size=0, gan_mode='vanilla')
-            parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
 
         return parser
 
@@ -37,24 +37,25 @@ class EmbModel(BaseModel):
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
         self.loss_names = ['G_L1']
         # specify the images you want to save/display. The training/test scripts will call <BaseModel.get_current_visuals>
-        self.visual_names = ['comp', 'real', 'generated']
+        self.visual_names = ['comp', 'real', 'harmonized']
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>
         self.model_names = ['G']
         # define networks (both generator and discriminator)
         self.intermediates = {}
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
                                       not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids,
-                                      intermediates=self.intermediates)
+                                      consume_intermediates=False)
 
+        # define loss functions
+        self.criterionL1 = torch.nn.L1Loss()
+            
         if self.isTrain:
-            # define loss functions
-            self.criterionL1 = torch.nn.L1Loss()
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
-            #self.optimizers.append(self.optimizer_G)
+            self.optimizers.append(self.optimizer_G)
 
     def __call__(self, image):
-        return self.netG(image)
+        return self.netG(image, im=self.intermediates)
             
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -64,16 +65,29 @@ class EmbModel(BaseModel):
 
         The option 'direction' can be used to swap images in domain A and domain B.
         """
-        self.comp = input['comp'].to(self.device)
         self.real = input['real'].to(self.device)
+        comp = input['comp'].to(self.device)
+        mask = input['mask'].to(self.device)
+        
+        self.comp = torch.cat([comp, mask], 1).to(self.device)
+        
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
-        self.generated = self.netG(self.comp)  # G(A)
+        self.harmonized = self.netG(self.comp, im=self.intermediates)  # G(A)
+    
+    def test(self):
+        """Forward function used in test time.
+
+        This function wraps <forward> function in no_grad() so we don't save intermediate steps for backprop
+        It also calls <compute_visuals> to produce additional visualization results
+        """
+        with torch.no_grad():
+            self.forward()
        
     def backward_G(self):
         """Calculate GAN and L1 loss for the generator"""
-        self.loss_G_L1 = self.criterionL1(self.generated, self.real) * self.opt.lambda_L1
+        self.loss_G_L1 = self.criterionL1(self.harmonized, self.real) * self.opt.lambda_L1
         self.loss_G = self.loss_G_L1
         self.loss_G.backward()
 

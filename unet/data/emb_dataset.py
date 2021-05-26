@@ -14,7 +14,11 @@ def read_rgba(img_path):
 
 def read_rgb(img_path):
     img = cv2.imread(img_path, cv2.IMREAD_UNCHANGED)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGBA)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    return img.astype(np.uint8)
+
+def read_mask(path):
+    img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
     return img.astype(np.uint8)
 
 
@@ -52,42 +56,32 @@ class EmbDataset(BaseDataset):
         self.image_paths = []
         self.isTrain = opt.isTrain
         self.dataset_root = opt.dataset_root
-        if opt.isTrain==True:
-            print('loading training file: ')
-            self.trainfile = os.path.join(opt.dataset_root, 'train.txt')
-            with open(self.trainfile,'r') as f:
-                    for line in f.readlines():
-                        self.image_paths.append(line.rstrip())
-        elif opt.isTrain==False:
-            print('loading test file')
-            self.trainfile = os.path.join(opt.dataset_root, 'test.txt')
-            with open(self.trainfile,'r') as f:
-                    for line in f.readlines():
-                        self.image_paths.append(line.rstrip())
+        file_type = 'train' if self.isTrain else 'test'
+        print(f'loading {file_type} file')
+        self.file = os.path.join(opt.dataset_root, f'{file_type}.txt')
+        with open(self.file, 'r') as f:
+                for line in f.readlines():
+                    self.image_paths.append(line.rstrip())
         self.transform = get_transform(opt)
-        self.image_size = [1024, 1024]
+        self.image_size = [256, 256]
 
     def __getitem__(self, index):
-        comp_name = self.image_paths[index]
-        comp_path = os.path.join(self.dataset_root, 'comp', comp_name)
-        
-        parts = comp_name.split('_')
-        real_name = '_'.join([parts[0], parts[2]]).replace('-', '_').replace('_bg', '');
+        real_name = self.image_paths[index]
         real_path = os.path.join(self.dataset_root, 'real', real_name)
+        comp_name = real_name.replace('_r', '_c');
+        comp_path = os.path.join(self.dataset_root, 'comp', comp_name)
+        mask_name = real_name.replace('_r', '_m');
+        mask_path = os.path.join(self.dataset_root, 'mask', mask_name)
 
-        try:
-            comp = read_rgba(comp_path)
-            real = read_rgb(real_path)
-        except Exception as e:
-            print('Exception', comp_path, real_path, '\n')
-            print(e)
+        comp = read_rgb(comp_path)
+        real = read_rgb(real_path)
+        mask = read_mask(mask_path)
         
-        comp = self.transform(comp)
-        real = self.transform(real)
+        comp = self.norm3(comp)
+        real = self.norm3(real)
+        mask = np.expand_dims(mask, axis=0)
         
-        real[:,:,3] = comp[:,:,3]  # copy mask
-
-        return {'comp': comp, 'real': real, 'img_path': comp_name}
+        return {'comp': comp, 'real': real, 'mask': mask, 'img_path': comp_name}
 
     def __len__(self):
         """Return the total number of images."""

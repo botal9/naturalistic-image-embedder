@@ -1,12 +1,11 @@
 import cv2
 import os.path
 import torch
-import torchvision.transforms.functional as tf
+import torchvision.transforms.functional as F
 from data.base_dataset import BaseDataset, get_transform, read_ldr, read_hdr, read_mask
-from models.hdr_model import HdrModel
 from PIL import Image
 import numpy as np
-import torchvision.transforms as transforms
+import torchvision.transforms as tf
 
 
 class MyDataset(BaseDataset):
@@ -42,20 +41,16 @@ class MyDataset(BaseDataset):
         BaseDataset.__init__(self, opt)
         self.image_paths = []
         self.isTrain = opt.isTrain
-        if opt.isTrain==True:
-            print('loading training file: ')
-            self.trainfile = opt.dataset_root+'train.txt'
-            with open(self.trainfile,'r') as f:
-                    for line in f.readlines():
-                        self.image_paths.append(os.path.join(opt.dataset_root, 'composite_images', line.rstrip()))
-        elif opt.isTrain==False:
-            print('loading test file')
-            self.trainfile = opt.dataset_root+'test.txt'
-            with open(self.trainfile,'r') as f:
-                    for line in f.readlines():
-                        self.image_paths.append(os.path.join(opt.dataset_root, 'composite_images', line.rstrip()))
+        file_type = 'train' if self.isTrain else 'test'
+        print(f'loading {file_type} file')
+        self.file = os.path.join(opt.dataset_root, f'validated_{file_type}.txt')
+        with open(self.file, 'r') as f:
+                for line in f.readlines():
+                    self.image_paths.append(os.path.join(opt.dataset_root, line.rstrip()))
         self.transform = get_transform(opt)
-        self.image_size = (1024, 1024)
+        self.image_size = (256, 256)
+        
+#         self.print_networks(True)
         
 
     def __getitem__(self, index):
@@ -73,37 +68,27 @@ class MyDataset(BaseDataset):
         Step 4: return a data point as a dictionary.
         """
         path = self.image_paths[index]
-        name_parts=path.split('_')
+        name_parts = path.split('_')
         mask_path = self.image_paths[index].replace('composite_images','masks')
         mask_path = mask_path.replace(('_'+name_parts[-1]),'.png')
-        target_path = self.image_paths[index].replace('composite_images','real_images')
+        target_path = self.image_paths[index].replace('composite_','real_')
         target_path = target_path.replace(('_'+name_parts[-2]+'_'+name_parts[-1]),'.jpg')
-        depth_path = self.image_paths[index].replace('composite_images','depth_images').replace('jpg', 'png')
+        depth_path = self.image_paths[index].replace('composite_','depth_').replace('jpg', 'png')
 
-        try: 
-            comp = read_ldr(path)
-            real = read_ldr(target_path)
-            mask = read_mask(mask_path)
-            depth = read_mask(depth_path)
-#             comp = Image.open(path).convert('RGB')
-#             real = Image.open(target_path).convert('RGB')
-# #             depth = Image.open(depth_path).convert('RGB')
-#             mask = Image.open(mask_path).convert('1')
-        except Exception as e:
-            print(e)
+        comp = read_ldr(path)
+        real = read_ldr(target_path)
+        mask = read_mask(mask_path)
+        depth = read_mask(depth_path)
             
         comp = cv2.resize(comp, self.image_size)
         mask = cv2.resize(mask, self.image_size)
         real = cv2.resize(real, self.image_size)
         depth = cv2.resize(depth, self.image_size)
 
-        #apply the same transform to composite and real images
-        comp = self.transform(comp)
-        mask = tf.to_tensor(mask)
-        real = self.transform(real)
-        depth = tf.to_tensor(depth)
-        #concate the composite and mask as the input of generator
-#         inputs=torch.cat([comp,mask],0)
+        comp = self.norm3(comp)
+        mask = F.to_tensor(mask)
+        real = self.norm3(real)
+        depth = self.norm1(depth)
 
         return {'comp': comp, 'real': real, 'img_path': path, 'mask': mask, 'depth': depth}
 

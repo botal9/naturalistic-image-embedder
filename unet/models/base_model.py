@@ -95,6 +95,12 @@ class BaseModel(ABC):
                 net = getattr(self, 'net' + name)
                 net.eval()
 
+    def train(self):
+        for name in self.model_names:
+            if isinstance(name, str):
+                net = getattr(self, 'net' + name)
+                net.train()
+
     def test(self):
         """Forward function used in test time.
 
@@ -103,8 +109,6 @@ class BaseModel(ABC):
         """
         with torch.no_grad():
             self.forward()
-            self.loss_G_L1 = self.criterionL1(self.harmonized, self.real)
-            self.compute_visuals()
 
     def compute_visuals(self):
         """Calculate additional output images for visdom and HTML visualization"""

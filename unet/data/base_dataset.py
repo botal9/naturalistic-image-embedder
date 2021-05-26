@@ -7,7 +7,7 @@ import random
 import numpy as np
 import torch.utils.data as data
 from PIL import Image
-import torchvision.transforms as transforms
+import torchvision.transforms as tf
 from abc import ABC, abstractmethod
 
 
@@ -48,6 +48,15 @@ class BaseDataset(data.Dataset, ABC):
         """
         self.opt = opt
         self.root = opt.dataroot
+        
+        self.norm1 = tf.Compose([
+            tf.ToTensor(),
+            tf.Normalize((0.5,), (0.5,)),
+        ])
+        self.norm3 = tf.Compose([
+            tf.ToTensor(),
+            tf.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        ])
 
     @staticmethod
     def modify_commandline_options(parser, is_train):
@@ -101,37 +110,37 @@ def get_params(opt, size):
 def get_transform(opt, params=None, grayscale=False, method=Image.BICUBIC, convert=True):
     transform_list = []
     if grayscale:
-        transform_list.append(transforms.Grayscale(1))
+        transform_list.append(tf.Grayscale(1))
     if 'resize' in opt.preprocess:
         osize = [opt.load_size, opt.load_size]
-        transform_list.append(transforms.Resize(osize, method))
+        transform_list.append(tf.Resize(osize, method))
     elif 'scale_width' in opt.preprocess:
-        transform_list.append(transforms.Lambda(lambda img: __scale_width(img, opt.load_size, method)))
+        transform_list.append(tf.Lambda(lambda img: __scale_width(img, opt.load_size, method)))
 
     if 'crop' in opt.preprocess:
         if params is None:
-            transform_list.append(transforms.RandomCrop(opt.crop_size))
+            transform_list.append(tf.RandomCrop(opt.crop_size))
         else:
-            transform_list.append(transforms.Lambda(lambda img: __crop(img, params['crop_pos'], opt.crop_size)))
+            transform_list.append(tf.Lambda(lambda img: __crop(img, params['crop_pos'], opt.crop_size)))
 
 #     if opt.preprocess == 'none':
-#         transform_list.append(transforms.Lambda(lambda img: __make_power_2(img, base=4, method=method)))
+#         transform_list.append(tf.Lambda(lambda img: __make_power_2(img, base=4, method=method)))
 
     if not opt.no_flip:
         if params is None:
-            transform_list.append(transforms.RandomHorizontalFlip())
+            transform_list.append(tf.RandomHorizontalFlip())
         elif params['flip']:
-            transform_list.append(transforms.Lambda(lambda img: __flip(img, params['flip'])))
+            transform_list.append(tf.Lambda(lambda img: __flip(img, params['flip'])))
 
     if convert:
-        transform_list += [transforms.ToTensor()]
+        transform_list += [tf.ToTensor()]
         if grayscale:
-            transform_list += [transforms.Normalize((0.5,), (0.5,))]
-#         elif opt.input_nc == 4:
-#             transform_list += [transforms.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))]
+            transform_list += [tf.Normalize((0.5,), (0.5,))]
+        elif opt.input_nc == 4:
+            transform_list += [tf.Normalize((0.5, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5))]
         else:
-            transform_list += [transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-    return transforms.Compose(transform_list)
+            transform_list += [tf.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+    return tf.Compose(transform_list)
 
 
 def __make_power_2(img, base, method=Image.BICUBIC):

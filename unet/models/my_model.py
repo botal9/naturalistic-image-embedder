@@ -21,7 +21,7 @@ class MyModel(BaseModel):
         By default, we use vanilla GAN loss, UNet with batchnorm, and aligned datasets.
         """
         # changing the default values to match the pix2pix paper (https://phillipi.github.io/pix2pix/)
-        parser.set_defaults(norm='batch', netG='unet_256', dataset_mode='my', input_nc=5, output_nc=3, niter=50, niter_decay=50, display_port=9333)
+        parser.set_defaults(norm='batch', netG='unet_256', dataset_mode='my', input_nc=5, output_nc=3, niter=80, niter_decay=80, display_port=9333)
         if is_train:
             parser.set_defaults(pool_size=0, gan_mode='vanilla')
             parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for L1 loss')
@@ -41,32 +41,32 @@ class MyModel(BaseModel):
         self.visual_names = ['comp', 'real', 'harmonized']
         # specify the models you want to save to the disk. The training/test scripts will call <BaseModel.save_networks> and <BaseModel.load_networks>
         self.model_names = ['G']
+        
+#         self.bg_intermediates = {}
+        self.fg_intermediates = {}
+        
         # define networks (both generator and discriminator)
         self.netG = networks.define_G(opt.input_nc, opt.output_nc, opt.ngf, opt.netG, opt.norm,
-                                      not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+                                      not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids,
+                                      consume_intermediates=True)
         
         opt.input_nc = 4  # !!!!
-        opt.output_nc = 4  # !!!!
+        opt.output_nc = 3  # !!!!
+        opt.netG = 'unet_256'  # !!!!
         embedding = EmbModel(opt)
         embedding.save_dir = opt.embedding_save_dir
-        embedding.load_networks('latest')
+        embedding.load_networks('150')
 #         embedding.set_requires_grad(['G'], False)
         embedding.print_networks(verbose=False)
         embedding.eval()
         self.embedding = embedding
-        
-        self.bg_intermediates = {}
-        self.fg_intermediates = {}
-
         
         if self.isTrain:
             # define loss functions
             self.criterionL1 = torch.nn.L1Loss()
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
-            #self.optimizers.append(self.optimizer_G)
-        else:
-            self.criterionL1 = torch.nn.MSELoss()
+            self.optimizers.append(self.optimizer_G)
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -79,28 +79,36 @@ class MyModel(BaseModel):
         self.image_paths = input['img_path']
         
         mask = input['mask'].to(self.device)
-        white_mask = torch.ones_like(mask) * 255
+        white_mask = torch.ones_like(mask)
         
         self.comp = input['comp'].to(self.device)
-        self.m_comp = torch.cat([self.comp, mask], 1).to(self.device)
-#         self.bg = torch.cat([comp, white_mask], 1).to(self.device)
+        self.fg = torch.cat([self.comp, mask], 1).to(self.device)
+        self.bg = torch.cat([self.comp, white_mask], 1).to(self.device)
         
-#         self.bg_embedding = self.embedding(self.bg).detach()
-#         self.bg_intermediates, embedding.intermediates = embedding.intermediates, {}
-        self.fg_embedding = self.embedding(self.m_comp).detach()
+        with torch.no_grad():
+            _ = self.embedding(self.bg).detach()
+        self.bg_intermediates, self.embedding.intermediates = self.embedding.intermediates, {}
+        with torch.no_grad():
+            _ = self.embedding(self.fg).detach()
         self.fg_intermediates, self.embedding.intermediates = self.embedding.intermediates, {}
         
         self.real = input['real'].to(self.device)
         self.depth = input['depth'].to(self.device)
-        self.inputs = torch.cat([self.m_comp, self.depth], 1).to(self.device)
-        
-        self.netG.fg_embedding = self.fg_embedding
-#         self.netG.bg_embedding = self.bg_embedding
+        self.inputs = torch.cat([self.fg, self.depth], 1)
         
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
-        self.harmonized = self.netG(self.inputs)  # G(A)
+        self.harmonized = self.netG(self.inputs, im=self.fg_intermediates, im1=self.bg_intermediates)  # G(A)
+    
+    def test(self):
+        """Forward function used in test time.
+
+        This function wraps <forward> function in no_grad() so we don't save intermediate steps for backprop
+        It also calls <compute_visuals> to produce additional visualization results
+        """
+        with torch.no_grad():
+            self.forward()
 
     def backward_G(self):
         """Calculate GAN and L1 loss for the generator"""
