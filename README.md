@@ -1,5 +1,8 @@
 # naturalistic-image-embedder
 
+### Pre-trained models
+The pre-trained models for [embedding](https://disk.yandex.ru/d/Cn_5wbw_bQcugg) and [generator](https://disk.yandex.ru/d/QoCi6cz0ulZp8g) should be placed at "checkpoints" directory.
+
 ### Run
 
 Execute `python3 sample.py` to run all samples. The results will be in the `/out` subdirectory.
